@@ -1,94 +1,107 @@
-import * as THREE from 'three';
+
 
 class VoxelLoader {
     constructor(chunkSize) {
         this.chunkSize = chunkSize;
+
         this.chunk = new Map();
+        this.positions = [];
+        this.uvs = [];
+        this.normals = [];
+        this.indices = [];
     }
     /* input chunk position
        returns positions, normals, and indicies for voxel rendering
     */
     generateGeometryForChunk(chunkX, chunkY, chunkZ) {
-        const { chunkSize } = this;
-        const positions = [];
-        const normals = [];
-        const indices = [];
+        const { chunkSize, positions, normals, indices, uvs } = this;
+        positions.length = 0;
+        normals.length = 0;
+        indices.length = 0;
+        uvs.length = 0;
+     
+        
+
 
         const startX = chunkX * chunkSize;
         const startY = chunkY * chunkSize;
         const startZ = chunkZ * chunkSize;
 
-        for (let y = 0; y < chunkSize; y++) {
-            const voxelY = startY + y
-            for (let x = 0; x < chunkSize; x++) {
-                const voxelX = startX + x
-                for (let z = 0; z < chunkSize; z++) {
-                    const voxelZ = startZ + z;
-
-                    for (const { vertices, normal } of VoxelLoader.faces) {
+        for (let voxelY = startY; voxelY < startY + chunkSize; voxelY++) {
+            for (let voxelX = startX; voxelX < startX + chunkSize; voxelX++) {
+                for (let voxelZ = startZ; voxelZ < startZ + chunkSize; voxelZ++) {
+                    const uvVoxel = this.getVoxel(voxelX, voxelY, voxelZ);
+                    for (const { normal, vertices, uvRow } of VoxelLoader.faces) {
                         const neighbor = this.getVoxel(voxelX + normal[0], voxelY + normal[1], voxelZ + normal[2]);
                         if (neighbor !== 1) {
                             const index = positions.length / 3;
-                            for (const position of vertices) {
-                                positions.push(position[0] + x, position[1] + y, position[2] + z);
+                            for (const {pos, uv} of vertices) {
+                                positions.push(pos[0] + voxelX - startX, pos[1] + voxelY - startY, pos[2] + voxelZ - startZ);
                                 normals.push(...normal);
+                                
+                                uvs.push(uvVoxel + uv[0], 1 - (uvRow + 1 - uv[1]));
                             }
                             indices.push(index, index + 1, index + 2, index + 2, index + 1, index + 3);
                             
                         }
-                    }   
+                    }  
                 }
             }
         }
 
-      
+    
         return {
-            positions, normals, indices
+            positions, normals, uvs, indices
         };
 
 
+    }
+    clamp(value, min, max) {
+        return Math.min(Math.max(value, min), max);
     }
 
 
 
 
     getChunkDataForVoxel(x, y, z) {
-        const { chunkSize } = this;
-        const chunkX = Math.floor(x/this.chunkSize);
-        const chunkY = Math.floor(y/this.chunkSize);
-        const chunkZ = Math.floor(z/this.chunkSize);
+        const { chunkSize, chunk } = this;
+        const chunkX = Math.floor(x / chunkSize);
+        const chunkY = Math.floor(y / chunkSize);
+        const chunkZ = Math.floor(z / chunkSize);
         const mapKey = `${chunkX}_${chunkY}_${chunkZ}`;
      
 
-        if (!this.chunk.has(mapKey)) {
-            this.chunk.set(mapKey, new Uint8Array(chunkSize * chunkSize * chunkSize)); 
+        if (!chunk.has(mapKey)) {
+            chunk.set(mapKey, new Uint8Array(chunkSize ** 3)); 
         }
 
-        return this.chunk.get(mapKey);
+        return chunk.get(mapKey);
 
     }
     // returns voxelData from voxel position
     getVoxel(x, y, z) {
-        const chunk = this.getChunkDataForVoxel(x, y, z);
-        const voxelIndex = this.calculateVoxelIndex(x, y, z);
+        const { chunk, voxelIndex } = this.getChunkAndVoxelIndex(x, y, z);
         return chunk[voxelIndex];
     }
 
     setVoxel(voxelPosX, voxelPosY, voxelPosZ) {
-        const chunk = this.getChunkDataForVoxel(voxelPosX, voxelPosY, voxelPosZ);
-        const voxelIndex  = this.calculateVoxelIndex(voxelPosX, voxelPosY, voxelPosZ);
+        const { chunk, voxelIndex } = this.getChunkAndVoxelIndex(voxelPosX, voxelPosY, voxelPosZ);
         chunk[voxelIndex] = 1;
+    }
 
-
+    getChunkAndVoxelIndex(x, y, z) {
+        const chunk = this.getChunkDataForVoxel(x, y, z);
+        const voxelIndex = this.calculateVoxelIndex(x, y, z);
+        return { chunk, voxelIndex };
     }
 
 
 
     calculateVoxelIndex(x, y, z) {
         const { chunkSize } = this;
-        const voxelX = THREE.MathUtils.euclideanModulo(x, chunkSize) | 0;
-        const voxelY = THREE.MathUtils.euclideanModulo(y, chunkSize) | 0;
-        const voxelZ = THREE.MathUtils.euclideanModulo(z, chunkSize) | 0;
+        const voxelX = x % chunkSize;
+        const voxelY = y % chunkSize;
+        const voxelZ = z % chunkSize;
         const voxelIndex = (voxelY * chunkSize * chunkSize) + (voxelZ * chunkSize) + voxelX;
 
         return voxelIndex;
@@ -100,51 +113,51 @@ class VoxelLoader {
 
 VoxelLoader.faces = [
     // front
-    { vertices: [
-        [ 0, 0, 1 ],
-        [ 1, 0, 1 ],
-        [ 0, 1, 1 ],
-        [ 1, 1, 1 ],
+    { uvRow: 0, vertices: [
+        { pos: [ 0, 0, 1 ], uv: [ 0, 0 ], },
+        { pos: [ 1, 0, 1 ], uv: [ 1, 0 ], },
+        { pos: [ 0, 1, 1 ], uv: [ 0, 1 ], },
+        { pos: [ 1, 1, 1 ], uv: [ 1, 1 ], },
     ], normal: [ 0,  0,  1]}, 
 
     //right
-    { vertices: [
-        [ 1, 1, 1 ],
-        [ 1, 0, 1 ],
-        [ 1, 1, 0 ],
-        [ 1, 0, 0 ],
+    { uvRow: 0, vertices: [
+        { pos: [ 1, 1, 1 ], uv: [ 0, 1 ], },
+        { pos: [ 1, 0, 1 ], uv: [ 0, 0 ], },
+        { pos: [ 1, 1, 0 ], uv: [ 1, 1 ], },
+        { pos: [ 1, 0, 0 ], uv: [ 1, 0 ], },
     ], normal: [ 1,  0,  0]}, 
 
     //back
-    { vertices: [
-        [ 1, 0, 0 ],
-        [ 0, 0, 0 ],
-        [ 1, 1, 0 ],
-        [ 0, 1, 0 ],
+    { uvRow: 0, vertices: [
+        { pos: [ 1, 0, 0 ], uv: [ 0, 0 ], },
+        { pos: [ 0, 0, 0 ], uv: [ 1, 0 ], },
+        { pos: [ 1, 1, 0 ], uv: [ 0, 1 ], },
+        { pos: [ 0, 1, 0 ], uv: [ 1, 1 ], },
     ], normal: [  0,  0, -1]}, 
 
     //left
-    { vertices: [
-        [ 0, 1, 0 ],
-        [ 0, 0, 0 ],
-        [ 0, 1, 1 ],
-        [ 0, 0, 1 ],
+    { uvRow: 0, vertices: [
+        { pos: [ 0, 1, 0 ], uv: [ 0, 1 ], },
+        { pos: [ 0, 0, 0 ], uv: [ 0, 0 ], },
+        { pos: [ 0, 1, 1 ], uv: [ 1, 1 ], },
+        { pos: [ 0, 0, 1 ], uv: [ 1, 0 ], },
     ], normal: [ -1,  0,  0]}, 
 
     //top
-    { vertices: [
-        [ 0, 1, 1 ],
-        [ 1, 1, 1 ],
-        [ 0, 1, 0 ],
-        [ 1, 1, 0 ],
+    { uvRow: 2, vertices: [
+        { pos: [ 0, 1, 1 ], uv: [ 1, 1 ], },
+        { pos: [ 1, 1, 1 ], uv: [ 0, 1 ], },
+        { pos: [ 0, 1, 0 ], uv: [ 1, 0 ], },
+        { pos: [ 1, 1, 0 ], uv: [ 0, 0 ], },
     ], normal: [ 0,  1,  0]}, 
 
     //bottom
-    { vertices: [
-        [ 1, 0, 1 ],
-        [ 0, 0, 1 ],
-        [ 1, 0, 0 ],
-        [ 0, 0, 0 ],
+    { uvRow: 1, vertices: [
+        { pos: [ 1, 0, 1 ], uv: [ 1, 0 ], },
+        { pos: [ 0, 0, 1 ], uv: [ 0, 0 ], },
+        { pos: [ 1, 0, 0 ], uv: [ 1, 1 ], },
+        { pos: [ 0, 0, 0 ], uv: [ 0, 1 ], },
     ], normal: [ 0, -1,  0]}, 
   ];
 

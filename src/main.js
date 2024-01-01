@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { Color, BoxGeometry, Scene, PlaneGeometry, MeshPhongMaterial, PerspectiveCamera, Mesh, MeshBasicMaterial, PointLightHelper, AxesHelper, PCFSoftShadowMap, WebGLRenderer, PointLight, DoubleSide, } from 'three';
+
+import { Color, Mesh, BufferAttribute, WebGLRenderer, NearestFilter, MeshPhongMaterial, DoubleSide, SRGBColorSpace, Scene, PCFSoftShadowMap, PerspectiveCamera, BufferGeometry, MeshLambertMaterial, DirectionalLight, TextureLoader, RepeatWrapping } from 'three';
 import WebGL from 'three/addons/capabilities/WebGL.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import VoxelLoader from './VoxelLoader.js';
@@ -18,7 +18,7 @@ const renderer = new WebGLRenderer(
 );
 renderer.physicallyCorrectLights = true;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = PCFSoftShadowMap;
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
 
@@ -44,7 +44,7 @@ window.addEventListener('resize', () => {
 
 //light and shadow initialization
 
-const light = new THREE.DirectionalLight(0xffffff);
+const light = new DirectionalLight(0xffffff);
 light.position.set(0, 15, 15);
 light.castShadow = true;
 scene.add(light);
@@ -53,14 +53,31 @@ stats.showPanel(0);
 document.body.appendChild(stats.dom);
 
 
+const loader = new TextureLoader();
+const sideGrassTexture = loader.load('../src/grass-side.png');
+sideGrassTexture.magFilter = NearestFilter;
+sideGrassTexture.minFilter = NearestFilter;
+//sideGrassTexture.colorSpace = SRGBColorSpace;
+sideGrassTexture.wrapS = RepeatWrapping;
+sideGrassTexture.wrapT = RepeatWrapping;
+
+const topGrassTexture = loader.load('../src/grass-top.png');
+topGrassTexture.magFilter = NearestFilter;
+topGrassTexture.minFilter = NearestFilter;
+//sideGrassTexture.colorSpace = SRGBColorSpace;
+topGrassTexture.wrapS = RepeatWrapping;
+topGrassTexture.wrapT = RepeatWrapping;
 
 
-const sideGrassTexture = new THREE.TextureLoader().load('../src/grass-side.png');
-const topGrassTexture = new THREE.TextureLoader().load('../src/grass-top.png');
-const chunkSize = 12;
-const renderDistance = 35;
 
-const world = new VoxelLoader(chunkSize);
+
+const chunkSize = 2;
+const renderDistance = 1;
+const tileSize = 16;
+const tileTextureWidth = 256;
+const tileTextureHeight = 64;
+
+const world = new VoxelLoader({chunkSize, tileSize, tileTextureWidth, tileTextureHeight});
 
 function generateChunk(chunkX, chunkY, chunkZ) {
     const startY = chunkY * chunkSize;
@@ -68,14 +85,17 @@ function generateChunk(chunkX, chunkY, chunkZ) {
     const startX = chunkX * chunkSize;
 
     
-    const { positions, normals, indices } = world.generateGeometryForChunk(chunkX, chunkY, chunkZ);
-    const cubeGeometry = new THREE.BufferGeometry();
-    const cubeMaterial = new THREE.MeshLambertMaterial({wireframe:true, color: 'green'});
+    const { positions, normals, uvs, indices } = world.generateGeometryForChunk(chunkX, chunkY, chunkZ);
+    const cubeGeometry = new BufferGeometry();
+
+    const cubeMaterial = new MeshLambertMaterial({wireframe:false, map: sideGrassTexture, alphaTest: 0.1, transparent: true, side: DoubleSide});
+
      
-    cubeGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-    cubeGeometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
+    cubeGeometry.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3));
+    cubeGeometry.setAttribute('normal', new BufferAttribute(new Float32Array(normals), 3));
+    cubeGeometry.setAttribute('uv', new BufferAttribute(new Float32Array(uvs), 2));
     cubeGeometry.setIndex(indices);
-    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    const cube = new Mesh(cubeGeometry, cubeMaterial);
     cube.position.set(startX, startY, startZ);
     scene.add(cube);
 
@@ -95,7 +115,7 @@ function setVoxels(chunkX, chunkY, chunkZ) {
 }
 
 function generateChunks() {
-    for (let y = 0; y < 3; y++) {
+    for (let y = 0; y < 1; y++) {
         for (let z = 0; z < renderDistance; z++) {
             for (let x = 0; x < renderDistance; x++) {
                 setVoxels(x, y, z);
@@ -104,7 +124,7 @@ function generateChunks() {
             }
         }
     }
-    for (let y = 0; y < 3; y++) {
+    for (let y = 0; y < 1; y++) {
         for (let z = 0; z < renderDistance; z++) {
             for (let x = 0; x < renderDistance; x++) {
            
