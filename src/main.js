@@ -65,7 +65,7 @@ const stats = new Stats();
 stats.showPanel(0);
 document.body.appendChild(stats.dom);
 
-const chunkSize = 250;
+const chunkSize = 750;
 const renderDistance = 1;
 const tileSize = 106.643;
 const tileTextureWidth = 106.643;
